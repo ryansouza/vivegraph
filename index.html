@@ -1,4 +1,6 @@
 <!DOCTYPE html>
+<html>
+<head>
 <meta charset="utf-8">
 <style>
 
@@ -13,6 +15,8 @@ text {
   font: 10px sans-serif;
 }
 
+li { display: inline-block; }
+
 .axis path,
 .axis line {
   fill: none;
@@ -20,19 +24,45 @@ text {
   shape-rendering: crispEdges;
 }
 
-.stroke
-{
-    text-shadow:
-    -1px -1px 0 #fff,
-    1px -1px 0 #fff,
-    -1px 1px 0 #fff,
-    1px 1px 0 #fff;  
+.stroke {
+	text-shadow:
+	-1px -1px 0 #fff,
+	1px -1px 0 #fff,
+	-1px 1px 0 #fff,
+	1px 1px 0 #fff;  
 }
 
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.4.0/knockout-min.js"></script>
 <script src="d3.v3.min.js"></script>
+</head>
+<body>
+<ul data-bind="foreach: locations">
+	<li><label><input type="checkbox" data-bind="checked: selected" ><span data-bind="text:label"></span></label></li>
+</ul>
+<label><input type="checkbox" data-bind="checked: all" >Select all</label>
 <script>
+var LocationModel = function( str ){
+	this.label = str;
+	this.selected = ko.observable(true);
+	this.selected.extend({ rateLimit: 50 })
+	this.selected.subscribe(function(newValue) {
+		redraw();
+	});
+};
 
+var regionModel = {
+	locations: ko.observableArray([new LocationModel("None")]),
+	all: ko.observable(true),
+	updating: false
+};
+
+regionModel.all.subscribe(function(newValue) {
+updating=true;
+	regionModel.locations().forEach( function(l){ l.selected(newValue);});
+updating=false;
+		redraw();
+	});
 function sortNum(a,b) {
 	return a - b;
 }
@@ -52,11 +82,27 @@ function transform2xy( data ) {
 	return res;
 }
 
+
+
 var jsonsource = 'reddit_users.json';//'https://vive.lol/data/reddit_users.json'
 var jsondata = {};
 
 d3.json(jsonsource, function(jd) { 
 	jsondata = jd;
+	
+	var unique = {};
+	var distinct = [];
+	jd.forEach(function (x) {
+		var loc = x.location;
+		if ( loc != undefined && !unique[loc]) {
+			regionModel.locations.push(new LocationModel(loc));
+			unique[loc] = true;
+		}
+	});
+	
+	regionModel.locations.sort(function sortStr(a,b){
+	return a.label.localeCompare(b.label);
+});
 	redraw();
 });
 
@@ -77,9 +123,18 @@ function addMissingEntries( range, data ) {
 			return { x:r, y:0 };
 	});
 }
+	var margin = {top: 40, right: 10, bottom: 30, left: 35},
+		width = 960 - margin.left - margin.right,
+		height = 500 - margin.top - margin.bottom;
 
-function addChart( dataset, colors, x_label, y_label, numeric ){
+function addChartSvg() {
+	return d3.select("body").append("svg")
+			.attr("width", width + margin.left + margin.right)
+		.attr("height", height + margin.top + margin.bottom);
+}
 
+function redrawChart( svg, dataset, colors, x_label, y_label, numeric ){
+	svg.selectAll("*").remove();
 	var stack = d3.layout.stack();
 	
 	var xmap = [];
@@ -114,9 +169,6 @@ function addChart( dataset, colors, x_label, y_label, numeric ){
 
 	var layers = stack(dataset);
 	var y_max = d3.max(layers, function(layer) { return d3.max(layer, function(d) { return d.y0 + d.y; }); });
-	var margin = {top: 40, right: 10, bottom: 30, left: 35},
-		width = 960 - margin.left - margin.right,
-		height = 500 - margin.top - margin.bottom;
 
 	var x = d3.scale.ordinal()
 		.domain(d3.range(dataset[0].length))
@@ -129,7 +181,7 @@ function addChart( dataset, colors, x_label, y_label, numeric ){
 
 	var xAxis = d3.svg.axis()
 		.scale(x)
-		.tickSize(0)
+		.tickSize(3)
 		.tickPadding(6)
 		.orient("bottom")
 		.tickFormat(function(d,i){
@@ -142,12 +194,10 @@ function addChart( dataset, colors, x_label, y_label, numeric ){
 		.tickPadding(6)
 		.orient("left");
 
-	var svg = d3.select("body").append("svg")
-		.attr("width", width + margin.left + margin.right)
-		.attr("height", height + margin.top + margin.bottom)
-		.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+	var svg_g = svg.append("g")
+		.attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
-	var layer = svg.selectAll(".layer")
+	var layer = svg_g.selectAll(".layer")
 		.data(layers)
 		.enter().append("g")
 		.attr("class", "layer")
@@ -168,7 +218,7 @@ function addChart( dataset, colors, x_label, y_label, numeric ){
 		.attr("y", function(d) { return y(d.y0 + d.y); })
 		.attr("height", function(d) { return y(d.y0) - y(d.y0 + d.y); });
 
-	var xax = svg.append("g")
+	var xax = svg_g.append("g")
 		.attr("class", "x axis")
 		.attr("transform", "translate(0," + height + ")")
 		.call(xAxis);
@@ -181,16 +231,16 @@ function addChart( dataset, colors, x_label, y_label, numeric ){
 			.style("text-anchor", "start")
 			.classed("stroke", true);
 		
-	svg.append("g")
+	svg_g.append("g")
 		.attr("class", "y axis")
 		.call(yAxis);
 
-	svg.append("text")
+	svg_g.append("text")
 		.attr("text-anchor", "middle")
 		.attr("transform", "translate(-25,"+(height/2)+")rotate(-90)") 
 		.text(y_label);
 
-	svg.append("text")
+	svg_g.append("text")
 		.attr("text-anchor", "middle")
 		.attr("transform", "translate("+ (width/2) +","+(height+25)+")")
 		.text(x_label);
@@ -207,12 +257,26 @@ function _filter( sourcefilter, keyselector, sumfilter ){
 
 
 /// filters
-
+function wrongLocation( data ) {
+	var cmploc = (data.location!=undefined) ? data.location : "None";
+	var loc = regionModel.locations().filter(function(l){	return l.label == cmploc;});
+	if( loc.length == 1)
+	{
+		if( !(loc[0].selected()) )
+			return true;
+	}
+	else throw "invalid location";
+	return false;
+}
 function includeFirstHourOrders( data ) {
+	if( wrongLocation( data ) )
+		return false;
 	return data.preorder_minutes != undefined;
 }
 
 function excludeFirstHourOrders( data ) {
+	if( wrongLocation( data ) )
+		return false;
 	return data.preorder_minutes == undefined;
 }
 
@@ -258,9 +322,14 @@ function filterRollupNumeric( filter ) {
 		transform2xyNumericX
 	);
 }
+var chart1 = addChartSvg();
+var chart2 = addChartSvg();
+
 
 function redraw() {
-
+	if( regionModel.updating )
+		return;
+		
 	var filters = [
 		_filter( includeFirstHourOrders,preorderMinutes,shippedUndefSum ),
 		_filter( includeFirstHourOrders,preorderMinutes,shippedSum ),
@@ -270,7 +339,7 @@ function redraw() {
 
 	var colors = ["#aaa","#0a0", "#a00"];
 	
-	addChart( dataset, colors, "Minutes past XX:00 - Red: not shipped, Green: shipped, Gray: no info", "Number of orders", true );
+	redrawChart( chart1, dataset, colors, "Minutes past XX:00 - Red: not shipped, Green: shipped, Gray: no info", "Number of orders", true );
 	
 	var filters = [
 		_filter( includePreorderDate,preorderDate,shippedUndefSum ),
@@ -278,11 +347,14 @@ function redraw() {
 		_filter(  includePreorderDate,preorderDate,notShippedSum )
 	];
 	var dataset = filters.map( filterRollup );
-	addChart( dataset, colors, "Preorder date - Red: not shipped, Green: shipped, Gray: no info", "Number of orders, excluding first hour orders" );
+	redrawChart( chart2,dataset, colors, "Preorder date - Red: not shipped, Green: shipped, Gray: no info", "Number of orders, excluding first hour orders" );
 }
+ko.applyBindings(regionModel);
 
 </script>
 <ul>
 	<li><a href="https://vive.lol">vive.lol</a></li>
 	<li><a href="https://github.com/Zazcallabah/vivegraph">source</a></li>
 </ul>
+
+</body></html>
