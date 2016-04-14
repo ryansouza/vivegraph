@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8">
+<style>
+
+body {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  margin: auto;
+  position: relative;
+  width: 960px;
+}
+
+text {
+  font: 10px sans-serif;
+}
+
+li { display: inline-block; }
+
+.axis path,
+.axis line {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+
+.stroke
+{
+    text-shadow:
+    -1px -1px 0 #fff,
+    1px -1px 0 #fff,
+    -1px 1px 0 #fff,
+    1px 1px 0 #fff;  
+}
+
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.4.0/knockout-min.js"></script>
+<script src="d3.v3.min.js"></script>
+</head><body>
+<ul data-bind="foreach: locations">
+	<li><label><input type="checkbox" data-bind="checked: selected" ><span data-bind="text:label"></span></label></li>
+</ul>
+<p>
+<label><input type="checkbox" data-bind="checked: all" >Select all</label>
+
+<input style="width:300px" type="range"
+data-bind="attr: {min: 1456704000000, max: 1460556687689}, value: datefilter"  /><span data-bind="text: dateval"></span>
+</p>
+<script>
+
+
+var LocationModel = function( str ){
+	this.label = str;
+	this.selected = ko.observable(true);
+	this.selected.extend({ rateLimit: 50 })
+	this.selected.subscribe(function(newValue) {
+		redraw();
+	});
+};
+
+var regionModel = {
+	locations: ko.observableArray([new LocationModel("None")]),
+	all: ko.observable(true),
+	updating: false,
+	datefilter: ko.observable(1),
+	dateval : ko.observable("")
+		
+};
+
+regionModel.datefilter.subscribe(function(s){
+	var v = parseInt(s,10);
+	regionModel.dateval( new Date(v).toISOString().slice(0, 10));
+	redraw();
+});
+
+
+
+regionModel.all.subscribe(function(newValue) {
+updating=true;
+	regionModel.locations().forEach( function(l){ l.selected(newValue);});
+updating=false;
+		redraw();
+	});
+function sortNum(a,b) {
+	return a - b;
+}
+
+function sortStr(a,b){
+	return a.localeCompare(b);
+}
+
+
+function transform2xyNumericX( data ) {
+	var res = { x: +data.key, y: data.values }
+	return res;
+}
+
+function transform2xy( data ) {
+	var res = { x: data.key, y: data.values }
+	return res;
+}
+
+
+
+//var jsonsource = 'reddit_users.json';
+var jsonsource = 'https://vive.lol/data/reddit_users.json'
+var jsondata = {};
+
+d3.json(jsonsource, function(jd) { 
+	jsondata = jd;
+	
+	var unique = {};
+	var distinct = [];
+	jd.forEach(function (x) {
+
+		var loc = x.location;
+		if ( loc != undefined && !unique[loc]) {
+			regionModel.locations.push(new LocationModel(loc));
+			unique[loc] = true;
+		}
+	});
+	
+	regionModel.locations.sort(function sortStr(a,b){
+	return a.label.localeCompare(b.label);
+});
+regionModel.datefilter(new Date().getTime());
+});
+
+function d3rollup( data, key, filter, transform ) {
+	return d3.nest()
+		.key( key )
+		.rollup( function(d) { return d3.sum( d, filter ) } )
+		.entries( data )
+		.map( transform || transform2xy );
+}
+
+function addMissingEntries( range, data ) {
+	return range.map( function(r){
+		var filtered = data.filter( function(d){ return d.x==r; } );
+		if( filtered.length > 0 )
+			return filtered[0];
+		else
+			return { x:r, y:0 };
+	});
+}
+
+function addChartSvg() {
+	return d3.select("body").append("svg");
+}
+
+function redrawChart( svg, dataset, colors, x_label, y_label, numeric ){
+	svg.selectAll("*").remove();
+	var stack = d3.layout.stack();
+	
+	var xmap = [];
+	
+	dataset.forEach( function(s){
+		s.forEach( function(d){
+			if( xmap.filter( function(e){ return e === d.x; } ).length == 0 )
+				xmap.push(d.x);
+		});
+	});
+	
+	var sorter = numeric?sortNum:sortStr;
+	xmap.sort(sorter);
+	
+	var xmap_inv = {};
+	for( var i = 0; i < xmap.length; i++ )
+		xmap_inv[xmap[i]] = i;
+
+	if( numeric )
+	{
+		var minX = d3.min( dataset, function(b){
+			return d3.min( b, function(d){ return d.x; } );
+		});
+		var maxX = d3.max( dataset, function(b){
+			return d3.max( b, function(d){ return d.x; } );
+		});
+
+		// add missing entries of 0 before running d3 stack, otherwise the stack will be misaligned
+		var x_range = d3.range(minX,maxX+1);
+		dataset = dataset.map( function(d){ return addMissingEntries( x_range, d ); } );
+	}
+
+	var layers = stack(dataset);
+	var y_max = d3.max(layers, function(layer) { return d3.max(layer, function(d) { return d.y0 + d.y; }); });
+	var margin = {top: 40, right: 10, bottom: 30, left: 35},
+		width = 960 - margin.left - margin.right,
+		height = 600 - margin.top - margin.bottom;
+
+	var x = d3.scale.ordinal()
+		.domain(d3.range(dataset[0].length))
+		.rangeRoundBands([0, width], .08);
+
+	var y = d3.scale.linear()
+		.domain([0, y_max])
+		.range([height, 0]);
+
+
+	var xAxis = d3.svg.axis()
+		.scale(x)
+		.tickSize(3)
+		.tickPadding(6)
+		.orient("bottom")
+		.tickFormat(function(d,i){
+			return xmap[d];
+		});
+
+	var yAxis = d3.svg.axis()
+		.scale(y)
+		.tickSize(0)
+		.tickPadding(6)
+		.orient("left");
+
+	svg
+		.attr("width", width + margin.left + margin.right)
+		.attr("height", height + margin.top + margin.bottom)
+		.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+	var layer = svg.selectAll(".layer")
+		.data(layers)
+		.enter().append("g")
+		.attr("class", "layer")
+		.style("fill", function(d, i) { return colors[i]; });
+		
+	var rect = layer.selectAll("rect")
+		.data(function(d) { return d; })
+		.enter().append("rect")
+		.attr("x", function(d) { 
+		return x(xmap_inv[d.x]); 
+		})
+		.attr("y", height)
+		.attr("width", x.rangeBand())
+		.attr("height", 0);
+
+	rect.transition()
+		.delay(function(d, i) { return i * 10; })
+		.attr("y", function(d) { return y(d.y0 + d.y); })
+		.attr("height", function(d) { return y(d.y0) - y(d.y0 + d.y); });
+
+	var xax = svg.append("g")
+		.attr("class", "x axis")
+		.attr("transform", "translate(0," + height + ")")
+		.call(xAxis);
+	if( !numeric )
+		xax.selectAll("text")
+			.attr("y", 0)
+			.attr("x", 9)
+			.attr("dy", ".35em")
+			.attr("transform", "rotate(90)translate(-70,0)")
+			.style("text-anchor", "start")
+			.classed("stroke", true);
+		
+	svg.append("g")
+		.attr("class", "y axis")
+		.call(yAxis);
+
+	svg.append("text")
+		.attr("text-anchor", "middle")
+		.attr("transform", "translate(-25,"+(height/2)+")rotate(-90)") 
+		.text(y_label);
+
+	svg.append("text")
+		.attr("text-anchor", "middle")
+		.attr("transform", "translate("+ (width/2) +","+(height+25)+")")
+		.text(x_label);
+
+}
+
+function _filter( sourcefilter, keyselector, sumfilter ){
+	return {
+		source: sourcefilter,
+		key: keyselector,
+		sum: sumfilter
+	};
+};
+
+
+/// filters
+function wrongLocation( data ) {
+	var cmploc = (data.location!=undefined) ? data.location : "None";
+	var loc = regionModel.locations().filter(function(l){	return l.label == cmploc;});
+	if( loc.length == 1)
+	{
+		if( !(loc[0].selected()) )
+			return true;
+	}
+	else throw "invalid location";
+	return false;
+}
+function includeFirstHourOrders( data ) {
+	if( wrongLocation( data ) )
+		return false;
+	return data.preorder_minutes != undefined;
+}
+
+function excludeFirstHourOrders( data ) {
+	if( wrongLocation( data ) )
+		return false;
+	return data.preorder_minutes == undefined;
+}
+
+function includePreorderDate( data ) {
+	if( wrongLocation( data ) )
+		return false;
+	return data.preorder_date != undefined;
+}
+
+function preorderMinutes( d ) {
+	return d.preorder_minutes;
+};
+
+function preorderDate( d ) {
+	return d.preorder_date;
+};
+function shippedUndefSum( d ) {
+	return d.shipped === undefined ? 1 : 0;
+};
+
+function shippedSum( d ) {
+	if( d.shipped === undefined )
+		return 0;
+	if( !d.shipped )
+		return 0;
+	var m = d.earliest_shipped_report;
+	if( m > regionModel.datefilter()/1000 )
+		return 0;
+	return 1;
+}
+
+function notShippedSum( d ) {
+	if( d.shipped === undefined )
+		return 0;
+	if( d.shipped )
+		return 0;
+	var m = d.earliest_shipped_report;
+	if( m > regionModel.datefilter()/1000 )
+		return 1;
+	return 0;
+}
+
+function sortRollupLabel(a,b){
+	return a.x.localeCompare(b.x);
+}
+
+function filterRollup( filter ) {
+	return d3rollup(
+		jsondata.filter( filter.source ),
+		filter.key,
+		filter.sum
+	).sort( sortRollupLabel );
+}
+function filterRollupNumeric( filter ) {
+	return d3rollup(
+		jsondata.filter( filter.source ),
+		filter.key,
+		filter.sum,
+		transform2xyNumericX
+	);
+}
+var chart1 = addChartSvg();
+
+
+function redraw() {
+	if( regionModel.updating )
+		return;
+		
+	var filters = [
+		_filter( includePreorderDate,preorderDate,shippedUndefSum ),
+		_filter( includePreorderDate,preorderDate,shippedSum ),
+		_filter( includePreorderDate,preorderDate,notShippedSum )
+	];
+	var dataset = filters.map( filterRollup );
+
+	var colors = ["#aaa","#0a0", "#a00"];
+	
+	redrawChart( chart1, dataset, colors, "Minutes past XX:00 - Red: not shipped, Green: shipped, Gray: no info", "Number of orders" );
+}
+ko.applyBindings(regionModel);
+
+</script>
+<ul>
+	<li><a href="https://vive.lol">vive.lol</a></li>
+	<li><a href="https://github.com/Zazcallabah/vivegraph">source</a></li>
+</ul>
+
+</body></html>
