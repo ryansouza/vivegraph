@@ -24,6 +24,34 @@ li { display: inline-block; }
   shape-rendering: crispEdges;
 }
 
+.d3-tip {
+  line-height: 1;
+  font-weight: bold;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  border-radius: 2px;
+}
+
+/* Creates a small triangle extender for the tooltip */
+.d3-tip:after {
+  box-sizing: border-box;
+  display: inline;
+  font-size: 10px;
+  width: 100%;
+  line-height: 1;
+  color: rgba(0, 0, 0, 0.8);
+  content: "\25BC";
+  position: absolute;
+  text-align: center;
+}
+
+/* Style northward tooltips differently */
+.d3-tip.n:after {
+  margin: -1px 0 0 0;
+  top: 100%;
+  left: 0;
+}
 .stroke {
 	text-shadow:
 	-1px -1px 0 #fff,
@@ -84,7 +112,8 @@ function transform2xy( data ) {
 
 
 
-var jsonsource = 'reddit_users.json';//'https://vive.lol/data/reddit_users.json'
+//var jsonsource = 'reddit_users.json';
+var jsonsource = 'https://vive.lol/data/reddit_users.json'
 var jsondata = {};
 
 d3.json(jsonsource, function(jd) { 
@@ -92,6 +121,7 @@ d3.json(jsonsource, function(jd) {
 	
 	var unique = {};
 	var distinct = [];
+	var i = 0;
 	jd.forEach(function (x) {
 		var loc = x.location;
 		if ( loc != undefined && !unique[loc]) {
@@ -133,46 +163,17 @@ function addChartSvg() {
 		.attr("height", height + margin.top + margin.bottom);
 }
 
-function redrawChart( svg, dataset, colors, x_label, y_label, numeric ){
+function redrawChart( svg, dataset, colors, x_label, y_label ){
 	svg.selectAll("*").remove();
 	var stack = d3.layout.stack();
 	
-	var xmap = [];
-	
-	dataset.forEach( function(s){
-		s.forEach( function(d){
-			if( xmap.filter( function(e){ return e === d.x; } ).length == 0 )
-				xmap.push(d.x);
-		});
-	});
-	
-	var sorter = numeric?sortNum:sortStr;
-	xmap.sort(sorter);
-	
-	var xmap_inv = {};
-	for( var i = 0; i < xmap.length; i++ )
-		xmap_inv[xmap[i]] = i;
-
-	if( numeric )
-	{
-		var minX = d3.min( dataset, function(b){
-			return d3.min( b, function(d){ return d.x; } );
-		});
-		var maxX = d3.max( dataset, function(b){
-			return d3.max( b, function(d){ return d.x; } );
-		});
-
-		// add missing entries of 0 before running d3 stack, otherwise the stack will be misaligned
-		var x_range = d3.range(minX,maxX+1);
-		dataset = dataset.map( function(d){ return addMissingEntries( x_range, d ); } );
-	}
-
 	var layers = stack(dataset);
 	var y_max = d3.max(layers, function(layer) { return d3.max(layer, function(d) { return d.y0 + d.y; }); });
 
-	var x = d3.scale.ordinal()
-		.domain(d3.range(dataset[0].length))
-		.rangeRoundBands([0, width], .08);
+	var x = d3.scale.ordinal().rangeRoundBands([0, width], .08);
+	
+	var xdomaindata = dataset.reduce(function(d1,d2){ return d1.concat(d2) },[]);
+	x.domain(xdomaindata.map(function(d) { return d.x; }));
 
 	var y = d3.scale.linear()
 		.domain([0, y_max])
@@ -184,9 +185,7 @@ function redrawChart( svg, dataset, colors, x_label, y_label, numeric ){
 		.tickSize(3)
 		.tickPadding(6)
 		.orient("bottom")
-		.tickFormat(function(d,i){
-			return xmap[d];
-		});
+		.tickFormat("");
 
 	var yAxis = d3.svg.axis()
 		.scale(y)
@@ -203,35 +202,35 @@ function redrawChart( svg, dataset, colors, x_label, y_label, numeric ){
 		.attr("class", "layer")
 		.style("fill", function(d, i) { return colors[i]; });
 		
-	var rect = layer.selectAll("rect")
+	var rect_enter = layer.selectAll("rect")
 		.data(function(d) { return d; })
-		.enter().append("rect")
-		.attr("x", function(d) { 
-		return x(xmap_inv[d.x]); 
-		})
+		.enter();
+	var rect = rect_enter.append("rect")
+		.attr("x", function(d) { return x(d.x); })
 		.attr("y", height)
 		.attr("width", x.rangeBand())
 		.attr("height", 0);
-
+		
+	rect_enter.append("text")
+		.attr("x", function(d) { return x(d.x); })
+		.attr("y", function(d) { return y(d.y0) - y(d.y0 + d.y); })
+		.text(function(d,i){ return d.x; })
+	//		.attr("transform", "rotate(90)")
+//			.style("text-anchor", "start")
+			.classed("stroke", true)
+		;
+		
 	rect.transition()
 		.delay(function(d, i) { return i * 10; })
 		.attr("y", function(d) { return y(d.y0 + d.y); })
 		.attr("height", function(d) { return y(d.y0) - y(d.y0 + d.y); });
 
-	var xax = svg_g.append("g")
+	svg_g.append("g")
 		.attr("class", "x axis")
 		.attr("transform", "translate(0," + height + ")")
 		.call(xAxis);
-	if( !numeric )
-		xax.selectAll("text")
-			.attr("y", 0)
-			.attr("x", 9)
-			.attr("dy", ".35em")
-			.attr("transform", "rotate(90)translate(-70,0)")
-			.style("text-anchor", "start")
-			.classed("stroke", true);
-		
-	svg_g.append("g")
+
+		svg_g.append("g")
 		.attr("class", "y axis")
 		.call(yAxis);
 
