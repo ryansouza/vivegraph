@@ -88,7 +88,7 @@ var RegionModel = function(){
 	var currentDatePlusSome = new Date().getTime()+100000000
 	this.locations = {};
 	this.datefilter = ko.observable(currentDatePlusSome);
-	this.dateval = ko.observable("");
+	this.dateval = ko.observable(" ");
 	this.maxvalue = currentDatePlusSome;
 	this.delayActive=false;
 };
@@ -149,9 +149,11 @@ function sortStr(a,b){
 }
 
 
-function transform2xyNumericX( data ) {
-	var res = { x: +data.key, y: data.values }
-	return res;
+function sortDynamic(a,b){
+	if( isNaN(a) )
+		return sortStr(a,b);
+	else
+		return sortNum(parseInt(a,10), parseInt(b,10));
 }
 
 function transform2xy( data ) {
@@ -170,26 +172,9 @@ d3.json(jsonsource, function(jd) {
 	regionModel.delayedRedraw();
 });
 
-function d3rollup( data, key, filter, transform ) {
-	return d3.nest()
-		.key( key )
-		.rollup( function(d) { return d3.sum( d, filter ) } )
-		.entries( data )
-		.map( transform || transform2xy );
-}
-
-function addMissingEntries( range, data ) {
-	return range.map( function(r){
-		var filtered = data.filter( function(d){ return d.x==r; } );
-		if( filtered.length > 0 )
-			return filtered[0];
-		else
-			return { x:r, y:0 };
-	});
-}
-	var margin = {top: 40, right: 10, bottom: 30, left: 35},
+	var margin = {top: 40, right: 10, bottom: 100, left: 45},
 		width = 960 - margin.left - margin.right,
-		height = 500 - margin.top - margin.bottom;
+		height = 560 - margin.top - margin.bottom;
 
 function addChartSvg() {
 	return d3.select("body").append("svg")
@@ -197,45 +182,26 @@ function addChartSvg() {
 		.attr("height", height + margin.top + margin.bottom);
 }
 
-function redrawChart( svg, dataset, colors, x_label, y_label, numeric ){
+function redrawChart( svg, dataset, colors, x_label, y_label ){
 	svg.selectAll("*").remove();
 	var stack = d3.layout.stack();
 	
-	var xmap = [];
+	var x_domain = [];
 	
 	dataset.forEach( function(s){
 		s.forEach( function(d){
-			if( xmap.filter( function(e){ return e === d.x; } ).length == 0 )
-				xmap.push(d.x);
+			if( x_domain.filter( function(e){ return e === d.x; } ).length == 0 )
+				x_domain.push(d.x);
 		});
 	});
 	
-	var sorter = numeric?sortNum:sortStr;
-	xmap.sort(sorter);
-	
-	var xmap_inv = {};
-	for( var i = 0; i < xmap.length; i++ )
-		xmap_inv[xmap[i]] = i;
-
-	if( numeric )
-	{
-		var minX = d3.min( dataset, function(b){
-			return d3.min( b, function(d){ return d.x; } );
-		});
-		var maxX = d3.max( dataset, function(b){
-			return d3.max( b, function(d){ return d.x; } );
-		});
-
-		// add missing entries of 0 before running d3 stack, otherwise the stack will be misaligned
-		var x_range = d3.range(minX,maxX+1);
-		dataset = dataset.map( function(d){ return addMissingEntries( x_range, d ); } );
-	}
+	x_domain.sort( sortDynamic );
 
 	var layers = stack(dataset);
 	var y_max = d3.max(layers, function(layer) { return d3.max(layer, function(d) { return d.y0 + d.y; }); });
 
 	var x = d3.scale.ordinal()
-		.domain(d3.range(dataset[0].length))
+		.domain(x_domain)
 		.rangeRoundBands([0, width], .08);
 
 	var y = d3.scale.linear()
@@ -247,10 +213,7 @@ function redrawChart( svg, dataset, colors, x_label, y_label, numeric ){
 		.scale(x)
 		.tickSize(3)
 		.tickPadding(6)
-		.orient("bottom")
-		.tickFormat(function(d,i){
-			return xmap[d];
-		});
+		.orient("bottom");
 
 	var yAxis = d3.svg.axis()
 		.scale(y)
@@ -271,38 +234,38 @@ function redrawChart( svg, dataset, colors, x_label, y_label, numeric ){
 		.data(function(d) { return d; })
 		.enter().append("rect")
 		.attr("x", function(d) { 
-		return x(xmap_inv[d.x]); 
+			return x(d.x); 
 		})
 		.attr("y", function(d) { return y(d.y0 + d.y); })
 		.attr("height", function(d) { return y(d.y0) - y(d.y0 + d.y); })
 	.attr("width", x.rangeBand());
 
 
-	var xax = svg_g.append("g")
+	var xAxisElement = svg_g.append("g")
 		.attr("class", "x axis")
 		.attr("transform", "translate(0," + height + ")")
 		.call(xAxis);
-	if( !numeric )
-		xax.selectAll("text")
-			.attr("y", 0)
-			.attr("x", 9)
-			.attr("dy", ".35em")
-			.attr("transform", "rotate(90)translate(-70,0)")
-			.style("text-anchor", "start")
-			.classed("stroke", true);
-		
+	xAxisElement.selectAll("text")
+		.attr("y", 0)
+		.attr("x", 9)
+		.attr("dy", ".35em")
+		.attr("transform", "rotate(90)")
+		.style("text-anchor", "start");
+
+		var labeldistance = xAxisElement.node().firstChild.getBBox().height;
+	
 	svg_g.append("g")
 		.attr("class", "y axis")
 		.call(yAxis);
 
 	svg_g.append("text")
 		.attr("text-anchor", "middle")
-		.attr("transform", "translate(-25,"+(height/2)+")rotate(-90)") 
+		.attr("transform", "translate(-30,"+(height/2)+")rotate(-90)") 
 		.text(y_label);
 
 	svg_g.append("text")
 		.attr("text-anchor", "middle")
-		.attr("transform", "translate("+ (width/2) +","+(height+25)+")")
+		.attr("transform", "translate("+ (width/2) +","+(height+20+labeldistance)+")")
 		.text(x_label);
 
 }
@@ -390,8 +353,12 @@ function shippedAll( d ) {
 	return 1;
 };
 
-function sortRollupLabel(a,b){
-	return a.x.localeCompare(b.x);
+function d3rollup( data, key, filter ) {
+	return d3.nest()
+		.key( key )
+		.rollup( function(d) { return d3.sum( d, filter ) } )
+		.entries( data )
+		.map( transform2xy );
 }
 
 function filterRollup( filter ) {
@@ -399,16 +366,9 @@ function filterRollup( filter ) {
 		jsondata.filter( filter.source ),
 		filter.key,
 		filter.sum
-	).sort( sortRollupLabel );
-}
-function filterRollupNumeric( filter ) {
-	return d3rollup(
-		jsondata.filter( filter.source ),
-		filter.key,
-		filter.sum,
-		transform2xyNumericX
 	);
 }
+
 var chart1 = addChartSvg();
 var chart2 = addChartSvg();
 var chart3 = addChartSvg();
@@ -421,11 +381,11 @@ function redraw() {
 		_filter( includeFirstHourOrders,preorderMinutes,shippedSum ),
 		_filter( includeFirstHourOrders,preorderMinutes,notShippedSum )
 	];
-	var dataset = filters.map( filterRollupNumeric );
+	var dataset = filters.map( filterRollup );
 
 	var colors = ["#aaa","#0a0", "#a00"];
 	
-	redrawChart( chart1, dataset, colors, "Minutes past XX:00 - Red: not shipped, Green: shipped, Gray: no info", "Number of orders", true );
+	redrawChart( chart1, dataset, colors, "Minutes past XX:00 - Red: not shipped, Green: shipped, Gray: no info", "Number of orders" );
 	
 	var filters = [
 		_filter( includePreorderDate,preorderDate,shippedUndefSum ),
@@ -435,14 +395,14 @@ function redraw() {
 	var dataset = filters.map( filterRollup );
 	redrawChart( chart2,dataset, colors, "Preorder date - Red: not shipped, Green: shipped, Gray: no info", "Number of orders, excluding first hour orders" );
 	
-	var filters = [
-		_filter( includeShipped,earliestShippedReport,shippedAll )
-	];
-	var dataset = filters.map( filterRollup );
+	var filters = [ _filter( includeShipped,earliestShippedReport,shippedAll ) ];
 
-	var colors = ["darkblue"];
-	
-	redrawChart( chart3, dataset, colors, "Date", "Number of shipped units" );
+	redrawChart(
+		chart3,
+		filters.map( filterRollup ),
+		["darkblue"],
+		"Date",
+		"Number of shipped units" );
 }
 ko.applyBindings(regionModel);
 
