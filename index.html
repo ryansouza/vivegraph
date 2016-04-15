@@ -15,8 +15,8 @@ text {
   font: 10px sans-serif;
 }
 
-li { display: inline-block; }
-
+.side { font: 0.6em; }
+.compact { display: inline-block}
 .axis path,
 .axis line {
   fill: none;
@@ -37,31 +37,108 @@ li { display: inline-block; }
 <script src="d3.v3.min.js"></script>
 </head>
 <body>
-<ul data-bind="foreach: locations">
-	<li><label><input type="checkbox" data-bind="checked: selected" ><span data-bind="text:label"></span></label></li>
+<div class="side">
+<label><input type="checkbox" id="toggleAll" data-bind="click: toggleAll" checked>Toggle all</label>
+<ul data-bind="foreach: locationGroups">
+	<li>
+		<span data-bind="text: name"></span>: <label><input type="checkbox" data-bind="attr:{id: name}, click: checked" checked >All</label>
+		<ul data-bind="foreach: entries">
+			<li class="compact"><label><input type="checkbox" data-bind="attr:{ id: $data }, click: $root.delayedRedraw" checked><span data-bind="text:$data"></span></label></li>
 </ul>
-<label><input type="checkbox" data-bind="checked: all" >Select all</label>
+	</li>
+</ul>
+</div>
+
+
+
+<p>3/29<input style="width:300px" type="range" oninput="onRangeInput(this.value)" 
+data-bind="attr: {min: 1459209600000, max: maxvalue}, value: datefilter"  />today<br><span data-bind="text: dateval"></span></p>
+
 <script>
-var LocationModel = function( str ){
-	this.label = str;
-	this.selected = ko.observable(true);
-	this.selected.extend({ rateLimit: 50 })
-	this.selected.subscribe(function(newValue) {
-		redraw();
+var Group = function( name, entries ){
+	this.name = name;
+	this.entries = entries;
+};
+Group.prototype.setAll = function(val){
+	this.entries.forEach(function(e){
+		document.getElementById(e).checked = val;
 	});
 };
-
-var regionModel = {
-	locations: ko.observableArray([new LocationModel("None")]),
-	all: ko.observable(true),
-	updating: false
+Group.prototype.checked = function(){
+	this.setAll(document.getElementById(this.name).checked);
+	regionModel.delayedRedraw();
+	return true;
 };
 
-regionModel.all.subscribe(function(newValue) {
-updating=true;
-	regionModel.locations().forEach( function(l){ l.selected(newValue);});
-updating=false;
+function onRangeInput( value ){
+	regionModel.datefilter(value);
+	regionModel.delayedRedraw();
+};
+var RegionModel = function(){
+
+	this.locationGroups = [
+		new Group("Other", ["None","AU","NZ","CN","JP","TW"] ),
+		new Group("United States",["US","US-AK","US-AL","US-AR","US-AZ","US-CA","US-CO","US-CT","US-DC","US-DE","US-FL","US-GA","US-HI","US-IA","US-ID","US-IL","US-IN","US-KS","US-KY",
+			"US-LA","US-MA","US-MD","US-ME","US-MI","US-MN","US-MO","US-MS","US-MT","US-NC","US-ND","US-NE","US-NH","US-NJ","US-NM","US-NV","US-NY","US-OH",
+			"US-OK","US-OR","US-PA","US-PR","US-RI","US-SC","US-SD","US-TN","US-TX","US-UT","US-VA","US-VT","US-WA","US-WI","US-WV","US-WY"] ),
+		new Group("Canada", ["CA","CA-AB","CA-BC","CA-MB","CA-NB","CA-NL","CA-NT","CA-NS","CA-NU","CA-ON","CA-PE","CA-QC","CA-SK","CA-YT"] ),
+		new Group("Europe", ["AT","BE","CH","CZ","DE","DK","ES","FI","FR","IE","IS","IT","NL","NO","PL","SE","UK"])
+	];
+
+	var currentDatePlusSome = new Date().getTime()+100000000
+	this.locations = {};
+	this.datefilter = ko.observable(currentDatePlusSome);
+	this.dateval = ko.observable("");
+	this.maxvalue = currentDatePlusSome;
+	this.delayActive=false;
+};
+RegionModel.prototype.toggleAll = function(){
+	var val = document.getElementById("toggleAll").checked;
+	this.locationGroups.forEach( function(g){
+		document.getElementById(g.name).checked = val;
+		g.setAll( val );
+	});
+	this.delayedRedraw();
+	return true;
+};
+RegionModel.prototype.delayedRedraw = function(slidervalue){
+	if( !jsondata.filter )
+		return true;
+	var that = regionModel;
+	if( that.delayActive )
+		return true;
+	that.delayActive = true;
+	setTimeout(function(){
 		redraw();
+		that.delayActive=false;
+	},100);
+	return true;
+};
+window.onload = function(){
+	var loc = window.location.hash.substring(1);
+	if( loc && loc.length > 0 )
+	{
+		document.getElementById("toggleAll").checked = false;
+		regionModel.toggleAll();
+		var em = document.getElementById(loc);
+		if( em )
+			em.checked = true;
+		
+	}
+};
+var regionModel = new RegionModel();
+function updateLocations(){
+	var l = {};
+	regionModel.locationGroups.forEach(function(g){
+		g.entries.forEach(function(e){
+			l[e]=document.getElementById(e).checked;
+		});
+	});
+	regionModel.locations = l;
+};
+regionModel.datefilter.subscribe(function(s){
+	var v = parseInt(s,10);
+	regionModel.dateval( new Date(v).toISOString().slice(0, 10));
 	});
 function sortNum(a,b) {
 	return a - b;
@@ -84,26 +161,13 @@ function transform2xy( data ) {
 
 
 
-var jsonsource = 'reddit_users.json';//'https://vive.lol/data/reddit_users.json'
+//var jsonsource = 'reddit_users.json';
+var jsonsource = 'https://vive.lol/data/reddit_users.json';
 var jsondata = {};
 
 d3.json(jsonsource, function(jd) { 
 	jsondata = jd;
-	
-	var unique = {};
-	var distinct = [];
-	jd.forEach(function (x) {
-		var loc = x.location;
-		if ( loc != undefined && !unique[loc]) {
-			regionModel.locations.push(new LocationModel(loc));
-			unique[loc] = true;
-		}
-	});
-	
-	regionModel.locations.sort(function sortStr(a,b){
-	return a.label.localeCompare(b.label);
-});
-	redraw();
+	regionModel.delayedRedraw();
 });
 
 function d3rollup( data, key, filter, transform ) {
@@ -209,14 +273,10 @@ function redrawChart( svg, dataset, colors, x_label, y_label, numeric ){
 		.attr("x", function(d) { 
 		return x(xmap_inv[d.x]); 
 		})
-		.attr("y", height)
-		.attr("width", x.rangeBand())
-		.attr("height", 0);
-
-	rect.transition()
-		.delay(function(d, i) { return i * 10; })
 		.attr("y", function(d) { return y(d.y0 + d.y); })
-		.attr("height", function(d) { return y(d.y0) - y(d.y0 + d.y); });
+		.attr("height", function(d) { return y(d.y0) - y(d.y0 + d.y); })
+	.attr("width", x.rangeBand());
+
 
 	var xax = svg_g.append("g")
 		.attr("class", "x axis")
@@ -259,13 +319,11 @@ function _filter( sourcefilter, keyselector, sumfilter ){
 /// filters
 function wrongLocation( data ) {
 	var cmploc = (data.location!=undefined) ? data.location : "None";
-	var loc = regionModel.locations().filter(function(l){	return l.label == cmploc;});
-	if( loc.length == 1)
+	var loc = regionModel.locations[cmploc];
+	if( loc === undefined || !loc)
 	{
-		if( !(loc[0].selected()) )
 			return true;
 	}
-	else throw "invalid location";
 	return false;
 }
 function includeFirstHourOrders( data ) {
@@ -292,16 +350,45 @@ function preorderDate( d ) {
 	return d.preorder_date;
 };
 function shippedUndefSum( d ) {
-	return d.shipped == undefined ? 1 : 0;
+	return d.shipped === undefined ? 1 : 0;
 };
 
 function shippedSum( d ) {
-	return (d.shipped != undefined && d.shipped) ? 1 : 0; 
+	if( d.shipped === undefined )
+		return 0;
+	if( !d.shipped )
+		return 0;
+	var m = d.earliest_shipped_report;
+	if( m > regionModel.datefilter()/1000 )
+		return 0;
+	return 1;
 }
 
 function notShippedSum( d ) {
-	return (d.shipped != undefined && !d.shipped) ? 1 : 0;
+	if( d.shipped === undefined )
+		return 0;
+	if( !d.shipped )
+		return 1;
+	var m = d.earliest_shipped_report;
+	if( m > regionModel.datefilter()/1000 )
+		return 1;
+	return 0;
 }
+
+function includeShipped( data ){
+	if( wrongLocation( data ) )
+		return false;
+	return data.shipped;
+};
+
+
+function earliestShippedReport(d){
+	return new Date( d.earliest_shipped_report * 1000 ).toISOString().slice(0, 10);
+};
+
+function shippedAll( d ) {
+	return 1;
+};
 
 function sortRollupLabel(a,b){
 	return a.x.localeCompare(b.x);
@@ -324,12 +411,11 @@ function filterRollupNumeric( filter ) {
 }
 var chart1 = addChartSvg();
 var chart2 = addChartSvg();
+var chart3 = addChartSvg();
 
 
 function redraw() {
-	if( regionModel.updating )
-		return;
-		
+		updateLocations();
 	var filters = [
 		_filter( includeFirstHourOrders,preorderMinutes,shippedUndefSum ),
 		_filter( includeFirstHourOrders,preorderMinutes,shippedSum ),
@@ -348,6 +434,15 @@ function redraw() {
 	];
 	var dataset = filters.map( filterRollup );
 	redrawChart( chart2,dataset, colors, "Preorder date - Red: not shipped, Green: shipped, Gray: no info", "Number of orders, excluding first hour orders" );
+	
+	var filters = [
+		_filter( includeShipped,earliestShippedReport,shippedAll )
+	];
+	var dataset = filters.map( filterRollup );
+
+	var colors = ["darkblue"];
+	
+	redrawChart( chart3, dataset, colors, "Date", "Number of shipped units globally" );
 }
 ko.applyBindings(regionModel);
 
