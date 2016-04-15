@@ -7,6 +7,7 @@
 body {
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   margin: auto;
+  margin-top: 1em;
   position: relative;
   width: 960px;
 }
@@ -15,7 +16,7 @@ text {
   font: 10px sans-serif;
 }
 
-.side { font: 0.6em; }
+#filters { font-size: 0.75em; }
 .compact { display: inline-block}
 .axis path,
 .axis line {
@@ -24,20 +25,12 @@ text {
   shape-rendering: crispEdges;
 }
 
-.stroke {
-	text-shadow:
-	-1px -1px 0 #fff,
-	1px -1px 0 #fff,
-	-1px 1px 0 #fff,
-	1px 1px 0 #fff;  
-}
-
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.4.0/knockout-min.js"></script>
 <script src="d3.v3.min.js"></script>
 </head>
 <body>
-<div class="side">
+<div id="filters">
 <label><input type="checkbox" id="toggleAll" data-bind="click: toggleAll" checked>Toggle all</label>
 <ul data-bind="foreach: locationGroups">
 	<li>
@@ -88,7 +81,7 @@ var RegionModel = function(){
 	var currentDatePlusSome = new Date().getTime()+100000000
 	this.locations = {};
 	this.datefilter = ko.observable(currentDatePlusSome);
-	this.dateval = ko.observable(" ");
+	this.dateval = ko.observable(new Date().toISOString().slice(0, 10));
 	this.maxvalue = currentDatePlusSome;
 	this.delayActive=false;
 };
