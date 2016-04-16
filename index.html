@@ -148,6 +148,12 @@ function sortDynamic(a,b){
 	else
 		return sortNum(parseInt(a,10), parseInt(b,10));
 }
+function sortLayerDynamic(a,b){
+	if( isNaN(a.x) )
+		return sortStr(a.x,b.x);
+	else
+		return sortNum(parseInt(a.x,10), parseInt(b.x,10));
+}
 
 function transform2xy( data ) {
 	var res = { x: data.key, y: data.values }
@@ -232,6 +238,17 @@ function redrawChart( svg, dataset, colors, x_label, y_label ){
 		.attr("y", function(d) { return y(d.y0 + d.y); })
 		.attr("height", function(d) { return y(d.y0) - y(d.y0 + d.y); })
 	.attr("width", x.rangeBand());
+	
+	var toplayer = layers[layers.length-1];
+	toplayer.sort(sortLayerDynamic);
+	var colcount = toplayer.length;
+	var quadsize = colcount/4;
+	var quad = [0,0,0,0];
+	var i = 0;
+	toplayer.forEach( function(l){
+		var ix = Math.floor(i++/quadsize);
+		quad[ix] += l.y0+l.y;
+	});
 
 
 	var xAxisElement = svg_g.append("g")
@@ -260,6 +277,10 @@ function redrawChart( svg, dataset, colors, x_label, y_label ){
 		.attr("text-anchor", "middle")
 		.attr("transform", "translate("+ (width/2) +","+(height+20+labeldistance)+")")
 		.text(x_label);
+	svg_g.append("text")
+		.attr("text-anchor", "middle")
+		.attr("transform", "translate("+ (width/2) +","+(height+35+labeldistance)+")")
+		.text("Number of entries in each quantile: ["+quad.toString()+"]");
 
 }
 
