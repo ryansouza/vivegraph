@@ -103,7 +103,6 @@ function makeDomain( dataset ){
 Chart.prototype.labeldistance = function(axis){
 	if( this._labeldist === undefined )
 		this._labeldist = axis.node().firstChild.getBBox().height;
-	return this._labeldist;
 };
 
 Chart.prototype.appendText= function(label,position,side){
@@ -114,11 +113,68 @@ Chart.prototype.appendText= function(label,position,side){
 		.attr("transform", translate+rotate)
 		.text(label);
 };
+Chart.prototype.redrawLine = function( xydata ){
+	var x_min = d3.min(xydata, function(d){ return d.x; } );
+	var x_max = d3.max(xydata, function(d){ return d.x; } );
+	var x = d3.scale.linear()
+		.domain([x_min,x_max])
+		.range([0, this.width]);
+
+	var y = d3.scale.linear()
+		.domain([0, 100])
+		.range([this.height, 0]);
+	var xAxis = makeAxis(x,3,"bottom");
+	xAxis.tickFormat( function(d) { return new Date(d).toISOString().slice(0, 10); });
+	var yAxis = makeAxis(y,3,"left");
+
+	var dataline =  d3.svg.line()
+		.x(function(d) { return x(d.x); })
+		.y(function(d) { return y(d.y); })
+		.interpolate("linear");
+	this.svg_g.selectAll("*").remove();
+	this.svg_g.append("g").append("rect")
+		.attr("x", "0")
+		.attr("y", "0")
+		.attr("height", this.height)
+		.attr("width", this.width)
+		.attr("fill", "white");
+	this.svg_g.append("g").append("path")
+		.attr("d", dataline(xydata))
+		.attr("stroke", "black")
+		.attr("stroke-width", 2)
+		.attr("fill", "none");
+	this.svg_g.append("g").append("path")
+		.attr("d", dataline(xydata)+"L"+this.width+","+this.height+"L0,"+this.height)
+		.attr("fill", "#0a0");
+
+	this.addAxis( xAxis, yAxis );
+	this.addLabels();
+};
+
+Chart.prototype.addAxis = function( x, y ){
+	var em = this.svg_g.append("g")
+		.attr("class", "x axis")
+		.attr("transform", "translate(0," + this.height + ")")
+		.call(x);
+	em.selectAll("text")
+		.attr("y", 0)
+		.attr("x", 9)
+		.attr("dy", ".35em")
+		.attr("transform", "rotate(90)")
+		.style("text-anchor", "start");
+	this.labeldistance(em); //cache label size
+
+	this.svg_g.append("g")
+		.attr("class", "y axis")
+		.call(y);
+};
+Chart.prototype.addLabels = function(){
+	this.appendText( this.y_label, { x: -30, y: this.height/2 }, true );
+	this.appendText( this.x_label, { x: this.width/2, y: this.height + 20 + this._labeldist } );
+};
 Chart.prototype.redraw = function ( jsondata ){
 	var dataset = this.filters.map( function(f){ return f.run(jsondata); } );
 	var svg = this.svg;
-	var x_label = this.x_label;
-	var y_label = this.y_label;
 
 	var x_domain = makeDomain(dataset);
 	var layers =  d3.layout.stack()(dataset);
@@ -147,12 +203,10 @@ Chart.prototype.redraw = function ( jsondata ){
 	var yAxis = makeAxis(y,0,"left");
 	var y2Axis = makeAxis(y2,0,"right");
 
-	var svg_g = this.svg_g;
-
-	svg_g.selectAll("*").remove();
+	this.svg_g.selectAll("*").remove();
 
 	var filters = this.filters;
-	var layer = svg_g.selectAll(".layer")
+	var layer = this.svg_g.selectAll(".layer")
 		.data(layers)
 		.enter().append("g")
 		.attr("class", "layer")
@@ -172,35 +226,20 @@ Chart.prototype.redraw = function ( jsondata ){
 			.x(function(d) { return xpoint(d.x); })
 			.y(function(d) { return y2(d.y); })
 			.interpolate("bundle");
-		svg_g.append("g").append("path")
+		this.svg_g.append("g").append("path")
 			.attr("d", cdfLine(cdf))
 			.attr("stroke", "black")
 			.attr("stroke-dasharray","5,4")
 			.attr("stroke-width", 2)
 			.attr("fill", "none");
-		svg_g.append("g")
+		this.svg_g.append("g")
 			.attr("class", "y axis")
 			.attr("transform", "translate("+this.width+")")
 			.call(y2Axis);
 		this.appendText( "CDF", { x: this.width-4, y: this.height/2 }, true );
 	}
-
-	var xAxisElement = svg_g.append("g")
-		.attr("class", "x axis")
-		.attr("transform", "translate(0," + this.height + ")")
-		.call(xAxis);
-	xAxisElement.selectAll("text")
-		.attr("y", 0)
-		.attr("x", 9)
-		.attr("dy", ".35em")
-		.attr("transform", "rotate(90)")
-		.style("text-anchor", "start");
-
-	svg_g.append("g")
-		.attr("class", "y axis")
-		.call(yAxis);
-
-	this.appendText( y_label, { x: -30, y: this.height/2 }, true );
-	this.appendText( x_label, { x: this.width/2, y: this.height + 20 + this.labeldistance(xAxisElement) } );
+	
+	this.addAxis( xAxis, yAxis );
+	this.addLabels();
 }
 
