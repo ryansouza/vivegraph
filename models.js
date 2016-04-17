@@ -37,6 +37,7 @@ var RegionModel = function( redraw ){
 	this.maxvalue = currentDatePlusSome;
 	this.delayActive=true;
 	this._redraw = redraw;
+	this.showCDF = ko.observable(false);
 };
 RegionModel.prototype.toggleAll = function(){
 	var val = document.getElementById("toggleAll").checked;
@@ -47,6 +48,7 @@ RegionModel.prototype.toggleAll = function(){
 	this.delayedRedraw();
 	return true;
 };
+
 RegionModel.prototype.delayedRedraw = function(){
 	var that = this;
 	if( that.delayActive )

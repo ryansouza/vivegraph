@@ -49,7 +49,10 @@
 </div>
 
 <p>
-	3/29 <input style="width:300px" type="range" oninput="onRangeInput(this.value)" data-bind="attr: {min: 1459209600000, max: maxvalue}, value: datefilter"  /> today<br>
+	3/29 <input style="width:300px" type="range" oninput="onRangeInput(this.value)" data-bind="attr: {min: 1459209600000, max: maxvalue}, value: datefilter"  /> today | 
+	<label>
+		<input type="checkbox" data-bind="checked: showCDF"> Show cumulative distribution function</span>
+	</label><br>
 	<span data-bind="text: dateval"></span>
 </p>
 
@@ -58,6 +61,11 @@
 var regionModel = new RegionModel(
 	function redraw() {
 		regionModel.updateLocations();
+
+		firstHourChart.showCDF = regionModel.showCDF();
+		dateChart.showCDF = regionModel.showCDF();
+		shippedUnitsChart.showCDF = regionModel.showCDF();
+
 		firstHourChart.redraw( jsondata );
 		dateChart.redraw( jsondata );
 		shippedUnitsChart.redraw( jsondata );
@@ -68,6 +76,8 @@ function onRangeInput( value ){
 	regionModel.datefilter(value);
 	regionModel.delayedRedraw();
 };
+
+
 
 window.onload = function(){
 	ko.applyBindings(regionModel);
@@ -87,6 +97,9 @@ regionModel.datefilter.subscribe( function(s){
 	regionModel.dateval( new Date(v).toISOString().slice(0, 10) );
 });
 
+regionModel.showCDF.subscribe(function(v){
+	regionModel.delayedRedraw();
+});
 
 //var jsonsource = 'reddit_users.json';
 var jsonsource = 'https://vive.lol/data/reddit_users.json';
