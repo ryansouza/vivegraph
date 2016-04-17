@@ -138,6 +138,13 @@ var jsondata = {};
 
 d3.json(jsonsource, function(jd) { 
 	jsondata = jd;
+	jsondata.forEach(function(d){
+		if(!d.shipped && d.received)
+			d.shipped = d.received;
+		if(!d.earliest_shipped_report && d.earliest_received_report)
+			d.earliest_shipped_report = d.earliest_received_report;
+	});
+
 	regionModel.delayActive = false;
 	regionModel.delayedRedraw();
 });
