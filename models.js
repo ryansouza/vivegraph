@@ -12,10 +12,12 @@ Group.prototype.setAll = function(val){
 };
 Group.prototype.checked = function(){
 	this.setAll(document.getElementById(this.name).checked);
+	this.parent.locationDirty=true;
 	this.parent.delayedRedraw();
 	return true;
 };
 Group.prototype.triggerRedraw = function(){
+	this.parent.locationDirty = true;
 	this.parent.delayedRedraw();
 	return true;
 };
@@ -38,6 +40,7 @@ var RegionModel = function( redraw ){
 	this.delayActive=true;
 	this._redraw = redraw;
 	this.showCDF = ko.observable(false);
+	this.locationDirty = true;
 };
 RegionModel.prototype.toggleAll = function(){
 	var val = document.getElementById("toggleAll").checked;
@@ -45,6 +48,7 @@ RegionModel.prototype.toggleAll = function(){
 		document.getElementById(g.name).checked = val;
 		g.setAll( val );
 	});
+	this.locationDirty = true;
 	this.delayedRedraw();
 	return true;
 };

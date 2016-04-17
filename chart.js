@@ -63,7 +63,25 @@ function calculateCumulativeDistribution(layers){
 	return cdf;
 };
 
+Chart.prototype.htmlForInput = function( shouldHide, checked ){
+	var checked_str = checked ? "checked" : "";
+	var hide_str = shouldHide ? "none" : "";
+	return '<input type="radio" name="' + this._id + '" '+checked_str
+		+ ' onclick="document.getElementById(\'' + this._id
+		+ '\').style.display = \'' + hide_str + '\'"> ';
+}
+
+Chart.prototype.htmlForLabel = function( label, shouldHide ){
+	return '<label>'+this.htmlForInput(shouldHide,!shouldHide)+label+'</label> '
+}
+
 function Chart( filters, x_label, y_label, margin, width, height ){
+	this._id = Math.random();
+
+	var div = document.createElement("div");
+	div.className = "small";
+	div.innerHTML = this.htmlForLabel("Show",false)+this.htmlForLabel("Hide",true);
+	document.body.appendChild(div);
 
 	this.margin = margin || {top: 40, right: 45, bottom: 100, left: 45};
 	this.width = (width || 960) - this.margin.left - this.margin.right;
@@ -72,6 +90,7 @@ function Chart( filters, x_label, y_label, margin, width, height ){
 	this.x_label = x_label;
 	this.y_label = y_label;
 	this.svg = d3.select("body").append("svg")
+			.attr("id", this._id )
 			.attr("width", this.width + this.margin.left + this.margin.right)
 			.attr("height", this.height + this.margin.top + this.margin.bottom);
 	this.svg_g = this.svg.append("g")

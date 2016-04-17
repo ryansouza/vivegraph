@@ -14,8 +14,8 @@
 	text {
 		font: 10px sans-serif;
 	}
-
-	#filters { font-size: 0.75em; }
+	
+	div { font-size: 0.6em; }
 	.compact { display: inline-block; }
 
 	.axis path,
@@ -48,19 +48,21 @@
 	</ul>
 </div>
 
-<p>
+<div>
 	3/29 <input style="width:300px" type="range" oninput="onRangeInput(this.value)" data-bind="attr: {min: 1459209600000, max: maxvalue}, value: datefilter"  /> today | 
 	<label>
 		<input type="checkbox" data-bind="checked: showCDF"> Show cumulative distribution function</span>
 	</label><br>
 	<span data-bind="text: dateval"></span>
-</p>
+</div>
 
 <script>
 
 
 
 function countEntriesByTime(data,time){
+	if( !data || data.length == 0 )
+		return {x:time,y:0};
 	var y_total = data.length;
 	var y_sum = d3.sum( data, function(d){ return countsAsShippedAtTime( d, time ); } );
 	return {x:time,y:(y_sum/y_total)*100};
@@ -70,7 +72,7 @@ function transformPercentShippedData( rawdata )
 {
 	var ticks = new Date("2016-03-30").getTime();
 	var now = new Date().getTime();
-	var step = 3600000; // one hour
+	var step = 3600000*4; // four hours
 	var filtered_data = rawdata.filter( excludeWrongLocation );
 	var dataSet = [];
 	while( ticks <= now )
@@ -92,7 +94,11 @@ var regionModel = new RegionModel(
 		firstHourChart.redraw( jsondata );
 		dateChart.redraw( jsondata );
 		shippedUnitsChart.redraw( jsondata );
-		percentByTimeChart.redrawLine( transformPercentShippedData( jsondata ) );
+		if( regionModel.locationDirty )
+		{
+			regionModel.locationDirty = false;
+			percentByTimeChart.redrawLine( transformPercentShippedData( jsondata ) );
+		}
 	}
 );
 
