@@ -168,6 +168,12 @@ Chart.prototype.redrawLine = function( xydata ){
 
 	this.addAxis( xAxis, yAxis );
 	this.addLabels();
+	yAxis.orient("right");
+	this.svg_g.append("g")
+		.attr("class", "y axis")
+		.attr("transform", "translate("+this.width+")")
+		.call(yAxis);
+
 };
 
 Chart.prototype.addAxis = function( x, y ){
