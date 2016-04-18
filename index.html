@@ -2,6 +2,7 @@
 <html>
 <head>
 	<meta charset="utf-8">
+	<meta property="og:image" content="https://dl.dropboxusercontent.com/u/126999/vivegraph/thumb.png" />
 	<title>Tracking Vive preorder statistics. Data source: https://vive.lol</title>
 	<style>
 	body {
@@ -28,8 +29,8 @@
 	</style>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.4.0/knockout-min.js"></script>
 	<script src="d3.v3.min.js"></script>
-	<script src="models.js"></script>
 	<script src="chart.js"></script>
+	<script src="models.js"></script>
 </head>
 
 <body>
@@ -95,6 +96,7 @@ var regionModel = new RegionModel(
 		firstHourChart.redraw( jsondata );
 		dateChart.redraw( jsondata );
 		shippedUnitsChart.redraw( jsondata );
+		percentByLocationChart.redrawPercent(jsondata);
 		if( regionModel.locationDirty )
 		{
 			regionModel.locationDirty = false;
@@ -139,12 +141,13 @@ var jsondata = {};
 d3.json(jsonsource, function(jd) { 
 	jsondata = jd;
 	jsondata.forEach(function(d){
+		if( d.location == undefined )
+			d.location = "None";
 		if(!d.shipped && d.received)
 			d.shipped = d.received;
 		if(!d.earliest_shipped_report && d.earliest_received_report)
 			d.earliest_shipped_report = d.earliest_received_report;
 	});
-
 	regionModel.delayActive = false;
 	regionModel.delayedRedraw();
 });
@@ -184,14 +187,18 @@ function notShippedSum( d ) {
 
 // filter function for location data
 
-function wrongLocation( data ) {
+function locationExistsInSet( data, set ){
 	var cmploc = (data.location!=undefined) ? data.location : "None";
-	var loc = regionModel.locations[cmploc];
+	var loc = set[cmploc];
 	if( loc === undefined || !loc)
 	{
-			return true;
+		return false;
 	}
-	return false;
+	return true;
+}
+
+function wrongLocation( data ) {
+	return !locationExistsInSet(data,regionModel.locations);
 }
 
 function excludeWrongLocation( data ) {
@@ -282,6 +289,21 @@ var percentByTimeChart = new Chart(
 	"Percent out of total preorders shipped"
 );
 
+// Chart for percent shipped by location
+
+function includeLocation( data ) {
+	return data.location != undefined;
+}
+
+function keyLocation( d ) {
+	return d.location;
+};
+
+var percentByLocationChart = new Chart(
+	[new Filter(includeLocation,keyLocation,shippedSum,"lightblue")],
+	"",
+	"Percent shipped"
+);
 </script>
 
 <ul>

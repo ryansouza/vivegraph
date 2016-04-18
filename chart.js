@@ -132,6 +132,57 @@ Chart.prototype.appendText= function(label,position,side){
 		.attr("transform", translate+rotate)
 		.text(label);
 };
+
+Chart.prototype.redrawPercent = function( data ){
+	var dataset = this.filters.map( function(f){ return f.run(jsondata); } );
+	var percentset = dataset.map( function(entry){ 
+		return entry.map( function(ds){
+			var total = data.filter( function(d){ return d.location === ds.x; } ).length;
+			return {
+				x: ds.x,
+				y: (ds.y*100)/total,
+				y0: 0
+			};
+		});
+	});
+	
+	if( percentset && percentset.length > 0 )
+		percentset[0].sort(function(a,b){return a.y-b.y;});
+	
+	var x_domain = percentset[0].map(function(d){ return d.x; });
+
+	var x = d3.scale.ordinal()
+		.domain(x_domain)
+		.rangeRoundBands([0, this.width], .08);
+
+	var y = d3.scale.linear()
+		.domain([0, 100])
+		.range([this.height, 0]);
+
+	var xAxis = makeAxis(x,3,"bottom");
+	var yAxis = makeAxis(y,0,"left");
+
+	this.svg_g.selectAll("*").remove();
+
+	var filters = this.filters;
+	var layer = this.svg_g.selectAll(".layer")
+		.data(percentset)
+		.enter().append("g")
+		.attr("class", "layer")
+		.style("fill", function(d, i) { return filters[i].color; });
+		
+	var rect = layer.selectAll("rect")
+		.data(function(d) { return d; })
+		.enter().append("rect")
+		.attr("x", function(d) { return x(d.x); })
+		.attr("y", function(d) { return y(d.y); })
+		.attr("height", function(d) { return y(0) - y(d.y); })
+		.attr("width", x.rangeBand());
+		
+	this.addAxis(xAxis,yAxis);
+	this.addLabels();
+};
+
 Chart.prototype.redrawLine = function( xydata ){
 	var x_min = d3.min(xydata, function(d){ return d.x; } );
 	var x_max = d3.max(xydata, function(d){ return d.x; } );
@@ -199,7 +250,6 @@ Chart.prototype.addLabels = function(){
 };
 Chart.prototype.redraw = function ( jsondata ){
 	var dataset = this.filters.map( function(f){ return f.run(jsondata); } );
-	var svg = this.svg;
 
 	var x_domain = makeDomain(dataset);
 	var layers =  d3.layout.stack()(dataset);
