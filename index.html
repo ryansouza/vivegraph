@@ -96,7 +96,9 @@ var regionModel = new RegionModel(
 		firstHourChart.redraw( jsondata );
 		dateChart.redraw( jsondata );
 		shippedUnitsChart.redraw( jsondata );
+		dateChartWithPromisedMonth.redraw(jsondata);
 		percentByLocationChart.redrawPercent(jsondata);
+		firstHourChartWithPromisedMonth.redraw(jsondata);
 		if( regionModel.locationDirty )
 		{
 			regionModel.locationDirty = false;
@@ -304,6 +306,48 @@ var percentByLocationChart = new Chart(
 	"",
 	"Percent shipped"
 );
+
+
+function includeFirstHourOrdersWithPromisedMonth( data ){
+	if( wrongLocation( data ) )
+		return false;
+	return data.promised_month != undefined && data.preorder_minutes != undefined;
+}
+
+
+function shippedUndefSum( d ) {
+	return d.shipped === undefined ? 1 : 0;
+};
+
+var firstHourChartWithPromisedMonth = new Chart(
+	[
+		new Filter( includeFirstHourOrdersWithPromisedMonth, preorderMinutes, function(d){return d.promised_month === "April"}, "darkblue" ),
+		new Filter( includeFirstHourOrdersWithPromisedMonth, preorderMinutes, function(d){return d.promised_month === "May"}, "darkred" ),
+		new Filter( includeFirstHourOrdersWithPromisedMonth, preorderMinutes, function(d){return d.promised_month === "June"}, "darkgreen" ),
+		new Filter( includeFirstHourOrdersWithPromisedMonth, preorderMinutes, function(d){return d.promised_month === "July"}, "gray" )
+	],
+	"Minutes past XX:00 - blue: april, red: may, green: june, gray: july",
+	"Number of orders" 
+);
+
+function includePreorderDateWithPromisedMonth( data ) {
+	return data.preorder_date != undefined && data.promised_month != undefined && excludeFirstHourOrders(data);
+}
+
+
+var dateChartWithPromisedMonth = new Chart(
+	[
+		new Filter( includePreorderDateWithPromisedMonth, preorderDate, function(d){return d.promised_month === "April"}, "darkblue" ),
+		new Filter( includePreorderDateWithPromisedMonth, preorderDate, function(d){return d.promised_month === "May"}, "darkred" ),
+		new Filter( includePreorderDateWithPromisedMonth, preorderDate, function(d){return d.promised_month === "June"}, "darkgreen" ),
+		new Filter( includePreorderDateWithPromisedMonth, preorderDate, function(d){return d.promised_month === "July"}, "gray" )
+	],
+	"Preorder date - blue: april, red: may, green: june, gray: july",
+	"Number of orders, excluding first hour orders"
+
+);
+
+
 </script>
 
 <ul>
