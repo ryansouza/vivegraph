@@ -292,6 +292,8 @@ var percentByTimeChart = new Chart(
 // Chart for percent shipped by location
 
 function includeLocation( data ) {
+	if( wrongLocation( data ) )
+		return false;
 	return data.location != undefined;
 }
 
