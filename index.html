@@ -155,9 +155,6 @@ d3.json(jsonsource, function(jd) {
 
 // functions for summing specific groups of data
 
-function shippedUndefSum( d ) {
-	return d.shipped === undefined ? 1 : 0;
-};
 
 function countsAsShippedAtTime( d, time ) {
 	if( d.shipped === undefined )
@@ -204,6 +201,14 @@ function countsAsNotShippedAtTime( d, time ) {
 function notShippedSum( d ) {
   return countsAsNotShippedAtTime( d, regionModel.datefilter() );
 }
+
+function shippedUndefSum( d ) {
+  if( countsAsNotShippedAtTime( d, regionModel.datefilter() ) ) return 0;
+  if( countsAsShippedAtTime( d, regionModel.datefilter() ) ) return 0;
+  if( countsAsAuthorizedAtTime( d, regionModel.datefilter() ) ) return 0;
+
+	return d.shipped === undefined ? 1 : 0;
+};
 
 
 // filter function for location data
