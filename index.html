@@ -174,7 +174,6 @@ function countsAsAuthorizedAtTime( d, time ) {
   if( countsAsShippedAtTime(d, time) ) return 0
 
   var lastReport = Math.max(0, d.latest_survey_report_at || 0, d.latest_comment_report_at || 0, d.latest_flair_at || 0);
-  console.log(lastReport);
   if( lastReport * 1000 > time ) return 0;
 
   if( d.authorization === "Succeeded" ) return 1;
@@ -186,9 +185,20 @@ function authorizedSum(d) {
   return countsAsAuthorizedAtTime(d, regionModel.datefilter() );
 }
 
-function countsAsNotShippedAtTime( d, time ) {
+function countsAsNotShippedAtTime( d, time, old ) {
   if( countsAsAuthorizedAtTime(d, time) ) return 0;
 	if( d.shipped === undefined ) return 0;
+
+  var lastReport = Math.max(0, d.latest_survey_report_at || 0, d.latest_comment_report_at || 0, d.latest_flair_at || 0);
+  var tenDays = 10 * 24 * 60 * 60 * 1000;
+  if(old) {
+    // filter out reports newer than 10 days if we're doing old stuff
+    if( lastReport * 1000 > (time - tenDays) ) return 0;
+  } else {
+    // filter out reports older than 10 days if we're doing new stuff
+    if( lastReport * 1000 <= (time - tenDays) ) return 0;
+  }
+
 	if( !d.shipped )
 		return 1;
 	var m = d.earliest_shipped_report * 1000;
@@ -200,6 +210,10 @@ function countsAsNotShippedAtTime( d, time ) {
 
 function notShippedSum( d ) {
   return countsAsNotShippedAtTime( d, regionModel.datefilter() );
+}
+
+function notShippedOldSum( d ) {
+  return countsAsNotShippedAtTime( d, regionModel.datefilter(), true );
 }
 
 function shippedUndefSum( d ) {
@@ -249,9 +263,10 @@ var firstHourChart = new Chart(
 		new Filter( includeFirstHourOrders, preorderMinutes, shippedUndefSum, "#aaa" ),
 		new Filter( includeFirstHourOrders, preorderMinutes, shippedSum, "#0a0" ),
 		new Filter( includeFirstHourOrders, preorderMinutes, authorizedSum, "#cc0" ),
-		new Filter( includeFirstHourOrders, preorderMinutes, notShippedSum, "#a00" )
+		new Filter( includeFirstHourOrders, preorderMinutes, notShippedSum, "#a00" ),
+		new Filter( includeFirstHourOrders, preorderMinutes, notShippedOldSum, "#800" )
 	],
-	"Minutes past XX:00 - Red: not shipped, Yellow: authorized, Green: shipped, Gray: no info",
+	"Minutes past XX:00 - Dark Red: reported not shipped >10days ago, Red: not shipped, Yellow: authorized, Green: shipped, Gray: no info",
 	"Number of orders" 
 );
 
@@ -278,9 +293,10 @@ var dateChart = new Chart(
 		new Filter( includePreorderDate, preorderDate, shippedUndefSum, "#aaa" ),
 		new Filter( includePreorderDate, preorderDate, shippedSum, "#0a0" ),
 		new Filter( includePreorderDate, preorderDate, authorizedSum, "#cc0" ),
-		new Filter( includePreorderDate, preorderDate, notShippedSum, "#a00" )
+		new Filter( includePreorderDate, preorderDate, notShippedSum, "#a00" ),
+		new Filter( includePreorderDate, preorderDate, notShippedOldSum, "#800" )
 	],
-	"Preorder date - Red: not shipped, Yellow: authorized, Green: shipped, Gray: no info",
+  "Preorder date - Dark Red: reported not shipped >10days ago, Red: not shipped, Yellow: authorized, Green: shipped, Gray: no info",
 	"Number of orders, excluding first hour orders"
 );
 
